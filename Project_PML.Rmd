@@ -1,0 +1,148 @@
+---
+title: "Practical Machine Learning Project"
+author: "auematth"
+date: "Sunday, September 27th, 2015"
+output: html_document
+---
+
+
+This is the documentation of the course project of  Coursera's "The Data Scientist's Toolbox - Practical Machine Learning" .
+
+### Part 1: Preparation of data sample
+
+In the first part, the data sample is prepared for the model estimation. For this purpose, explanatory attributes of the data sample are binned and/or transformed.
+
+Numeric attributes are binned into segments and class attributes created as well as a standardised.
+Factor attributes are only re-segmented in order to classify missing values and aggregate data with scarce values to a Rest-class.
+
+Creation of Binning-Function to Bin/Transform explanatory attributes:
+```{r, echo=TRUE}
+## Generic binning of attributes
+#   Required: Input table with attributes that should be binned
+#   First few columns are missed out: Binning starts with attribut i
+#   Also, an attribut called "Target" at the end of the data sample is not binned
+library(data.table)
+
+binning <- function(daten, i) {
+  # daten: input data set 
+  # i: first attribute of data set in order to exclude row_id or something like that
+  
+  max <- ncol(daten)
+  
+  while(i <= max & colnames(daten)[i] != "Target")
+  {
+    myvar <-  daten[[i]]
+    varname=paste(colnames(daten)[i], "_CLS", sep = "")
+    varname2=paste(colnames(daten)[i], "_TF", sep = "")
+    if(is.numeric(myvar)){ # Binning of numeric attributes
+      try(daten$myvar <- cut(myvar, breaks=unique(quantile(myvar,probs=seq(0,1,0.2), na.rm=T)), include.lowest = TRUE, right=TRUE))
+      
+      
+      # Refactor missing values
+      if (length(daten$myvar[is.na(daten$myvar) == TRUE]) > 0 ) {
+        daten$myvar <- factor(daten$myvar, levels = c(levels(daten$myvar), "NULL"))
+        daten$myvar[is.na(daten$myvar)] <- "NULL"
+      }
+      
+      # Only keep if between 2 and 19 classes
+      if (length(levels(daten$myvar)) > 1 & length(levels(daten$myvar)) < 20 ) {
+        setnames(daten,"myvar",varname)
+      }
+    }   
+    
+        if(is.numeric(myvar)){ # Transformation of numeric attributes
+          daten$myvar <-(myvar - mean(myvar)) / sd(myvar)  
+          
+          if (length(daten$myvar[!is.na(daten$myvar)]) > 0 ) {
+            setnames(daten,"myvar",varname2)
+          } else {
+            daten <- subset( daten, select = -myvar )
+          }
+        }
+    
+    if(is.factor(myvar)){ # Binning of factor-attributes
+      ## Put classes lower 5% into Rest-class
+      daten$myvar <- myvar
+      
+      # Refactor missing values
+      if (length(daten$myvar[is.na(daten$myvar) == TRUE | daten$myvar == ""]) > 0 ) {
+        daten$myvar <- factor(daten$myvar, levels = c(levels(daten$myvar), "NULL"))
+        daten$myvar[is.na(daten$myvar)] <- "NULL"
+        daten$myvar[daten$myvar == ""] <- "NULL"
+      }
+      
+            mytab.pro <- prop.table(table(daten$myvar))*100       # %-distribution
+            daten$myvar <- factor(daten$myvar, levels = c(levels(daten$myvar), "REST"))
+            daten$myvar[daten$myvar %in% names(mytab.pro[mytab.pro < 5.0])] <- "REST"
+            daten$myvar <- factor(daten$myvar)
+      
+      if (length(levels(daten$myvar)) > 1 & length(levels(daten$myvar)) < 20 ) {
+        setnames(daten,"myvar",varname)
+      }
+    }  
+    i = i+1
+  }
+  test <- colnames(daten)[colnames(daten) %like% "_CLS" | colnames(daten) %like% "_TF"  | colnames(daten) == "Target"]
+  subset(daten, select=test)  
+}
+```
+Now load the data (Training-sample) and apply the variable binning function on it.
+After that, focus only on the new attributes and the Target-criterion (class attribute of original data sample).
+```{r, echo=TRUE}
+# Load training data sample
+pml.training <- read.csv("pml-training.csv", header=TRUE)
+
+# Rename Target-criterion (necessary for generic function)
+pml.training$Target <- pml.training$classe
+data_ana  <- binning(pml.training, 6)
+
+# Select only new attributes
+selection <- colnames(data_ana)[(colnames(data_ana) %like% "_CLS" | colnames(data_ana) %like% "_TF" | colnames(data_ana) == "Target") & colnames(data_ana) != "classe_CLS"  & colnames(data_ana) != "problem_id_CLS"]
+data_ana <- subset(data_ana, select=selection)  
+```
+
+### Part 2: Development of Machine Learning Model
+
+In this part, a model to estimate the Target criterion "classe" is developed and evaluated.
+
+For this case, a decision tree algorithm is applied. The R-package "rpart" with implemented CART-decision trees is used for this purpose. To begin with, the training data sample is split into new training and testing sample in order to evaluate predictive power of the model later.
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+# Load necessary packages
+library(caret)
+library(rpart)
+
+# Split data sample randomly (3/4 training, 1/4 testing)
+set.seed(125)
+
+inTrain = createDataPartition(data_ana$Target, p = 3/4)[[1]]
+training = data_ana[ inTrain,]
+testing = data_ana[-inTrain,]
+
+# Fit the model (CART decision tree)
+modelFit <- rpart(Target ~ .
+                , data= training
+                , method="class"
+                , control = rpart.control(minbucket = 20, cp = 0.00001, maxdepth = 15)
+                )
+```
+The parameters of the model where chosen considering accuracy in training and testing sample. In this report, only the final model is presented.
+
+The get an impression of the whole tree, R-package "rattle" is applied. The tree is too big to see details:
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+library(rattle)
+fancyRpartPlot(modelFit) 
+```
+
+Considering the descriptive power of the model, the accuracy for the testing and the training data has to be compared.
+Testing data sample:
+```{r, echo=TRUE}
+confusionMatrix(testing$Target,predict(modelFit, testing, type = "class"))
+```
+Training data sample:
+```{r, echo=TRUE}
+confusionMatrix(training$Target,predict(modelFit, training, type = "class"))
+```
+As we see in the comparison of the confusion matrix for testing and training data sample, the accuracy is quite close (0.919 % vs. 0.937). Therefore, there is no overfitting of the model visible.
+On the other hand, the model seems quite good (over 90% correct in the testing sample). Therefore a simple decision tree approach seems adequate for this problem.
