@@ -16,7 +16,7 @@ Numeric attributes are binned into segments and class attributes created as well
 Factor attributes are only re-segmented in order to classify missing values and aggregate data with scarce values to a Rest-class.
 
 Creation of Binning-Function to Bin/Transform explanatory attributes:
-```{r, echo=TRUE, firstchunk}
+```{r firstchunk, echo=TRUE}
 ## Generic binning of attributes
 #   Required: Input table with attributes that should be binned
 #   First few columns are missed out: Binning starts with attribut i
@@ -88,7 +88,7 @@ binning <- function(daten, i) {
 ```
 Now load the data (Training-sample) and apply the variable binning function on it.
 After that, focus only on the new attributes and the Target-criterion (class attribute of original data sample).
-```{r, echo=TRUE, secondchunk}
+```{r secondchunk, echo=TRUE}
 # Load training data sample
 pml.training <- read.csv("pml-training.csv", header=TRUE)
 
@@ -107,7 +107,7 @@ In this part, a model to estimate the Target criterion "classe" is developed and
 
 For this case, a decision tree algorithm is applied. The R-package "rpart" with implemented CART-decision trees is used for this purpose. To begin with, the training data sample is split into new training and testing sample in order to evaluate predictive power of the model later.
 
-```{r, echo=TRUE, warning=FALSE, message=FALSE, thirdchunk}
+```{r thirdchunk, echo=TRUE, warning=FALSE, message=FALSE}
 # Load necessary packages
 library(caret)
 library(rpart)
@@ -130,18 +130,18 @@ The parameters of the model where chosen considering accuracy in training and te
 
 The get an impression of the whole tree, R-package "rattle" is applied. The tree is too big to see details:
 
-```{r, echo=TRUE, warning=FALSE, message=FALSE, forthchunk}
+```{r forthchunk, echo=TRUE, warning=FALSE, message=FALSE}
 library(rattle)
 fancyRpartPlot(modelFit) 
 ```
 
 Considering the descriptive power of the model, the accuracy for the testing and the training data has to be compared.
 Testing data sample:
-```{r, echo=TRUE, fifthchunk}
+```{r fifthchunk, echo=TRUE}
 confusionMatrix(testing$Target,predict(modelFit, testing, type = "class"))
 ```
 Training data sample:
-```{r, echo=TRUE, sixthchunk}
+```{r sixthchunk, echo=TRUE}
 confusionMatrix(training$Target,predict(modelFit, training, type = "class"))
 ```
 As we see in the comparison of the confusion matrix for testing and training data sample, the accuracy is quite close (0.919 % vs. 0.937). Therefore, there is no overfitting of the model visible.
